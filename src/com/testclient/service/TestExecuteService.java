@@ -700,6 +700,21 @@ public class TestExecuteService {
 		}
 		return j;
 	}
+	private String urlEncodeValueForKVReqBody(String body){
+		String ret="";
+		for(String kv : body.split("&")){
+			String value=StringUtils.substringAfter(kv, "=");
+			String encoded=value;
+			try {
+				if(encoded.contains("\"") || encoded.contains("'"))
+					encoded=URLEncoder.encode(value, "utf-8");
+			} catch (UnsupportedEncodingException e) {
+				// TODO Auto-generated catch block
+			}
+			ret+=kv.replace(value, encoded)+"&";
+		}
+		return ret.substring(0, ret.length()-1);
+	}
 	
 	private TestResultItem getHttpTestResultItem(String path, Map request){
 		TestResultItem testresult=new TestResultItem();
@@ -717,6 +732,9 @@ public class TestExecuteService {
 			hf.setRequesttimeout(600*1000);
 			hf.setUrl(url);
 			String body=retrieveString(target.getRequestBody(),path, request);
+			if(body.contains("&") && body.contains("=")){
+				body=urlEncodeValueForKVReqBody(body);
+			}
 			requestinfo="[url]:\n"+url+"\n[request headers]:\n";	
 			Set<KeyValue> headset=target.getHeads();
 			for(KeyValue kv:headset){
@@ -725,7 +743,7 @@ public class TestExecuteService {
 				hf.addHeaderValue(k, v);
 				requestinfo+=k + ":"+v+"\n";
 			}
-			requestinfo+="[request body]:\n"+body;
+			requestinfo+="[request body]:\n"+URLDecoder.decode(body,"utf-8");
 			
 			String method=target.getMethod();
 			long start = System.currentTimeMillis();
