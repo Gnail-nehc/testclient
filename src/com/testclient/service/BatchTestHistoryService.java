@@ -22,6 +22,7 @@ import com.alipics.testassets.testclient.factory.JsonObjectMapperFactory;
 import com.alipics.testassets.testclient.httpmodel.BatchRunItem;
 import com.alipics.testassets.testclient.httpmodel.BatchTestItem;
 import com.alipics.testassets.testclient.httpmodel.BatchTestReport;
+import com.alipics.testassets.testclient.httpmodel.CheckPointItem;
 import com.alipics.testassets.testclient.httpmodel.DataGridJson;
 import com.alipics.testassets.testclient.httpmodel.Json;
 import com.alipics.testassets.testclient.httpmodel.TestResultItem;
@@ -159,7 +160,7 @@ public class BatchTestHistoryService {
 				String[] arr=filename.split("@");
 				String name=arr[0];
 				String time=arr[1];
-				String request="",response="";
+				String request="",response="",checkpoint="";
 				time=time.replace(time.split(" ")[1], time.split(" ")[1].replaceAll("-", ":"));
 				String duration=arr[2];
 				String result=StringUtils.substringBefore(arr[3], ".");
@@ -186,10 +187,14 @@ public class BatchTestHistoryService {
 						request=request.replace(removedtext, "").replace("[request headers]:", "");
 						if(!result.equalsIgnoreCase("e")){
 							response=tri.getResponseInfo();
+							checkpoint="";
 						}else{
 							response=tri.getComment();
 						}
 						response=StringUtils.substringAfter(response, "[body]:");
+						for(CheckPointItem item : tri.getCheckPoint()){
+							checkpoint+="比较类型："+item.getType()+" "+item.getName()+" "+item.getCheckInfo()+" "+item.getResult()+"\n";
+						}
 					}
 				} catch (Exception e) {
 					// TODO Auto-generated catch block
@@ -202,6 +207,7 @@ public class BatchTestHistoryService {
 				r.setResult(stuatus);
 				r.setRequest(request);
 				r.setResponse(response);
+				r.setCheckpoint(checkpoint);
 				list.add(r);
 			}
 		}
