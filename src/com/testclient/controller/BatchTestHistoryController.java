@@ -87,13 +87,14 @@ public class BatchTestHistoryController {
 		sheet.setColumnWidth(2, 256*15);
 		sheet.setColumnWidth(3, 256*10); 
 		sheet.setColumnWidth(4, 256*60);    
-		sheet.setColumnWidth(5, 256*100);    
+		sheet.setColumnWidth(5, 256*100);
+		sheet.setColumnWidth(6, 256*80);
 
 		// 创建标题行 
 		HSSFRow row0 = sheet.createRow(0);    
 		// 设置行高    
 		row0.setHeight((short) 400);
-		String columns="API;测试时间;接口耗时（ms）;结果;请求内容;响应内容";int i=0;
+		String columns="API;测试时间;接口耗时（ms）;结果;请求内容;响应内容;检查点";int i=0;
 		for(String column : columns.split(";")){
 			HSSFCell cell = row0.createCell(i++);  
 			cell.setCellValue(new HSSFRichTextString(column));   
@@ -120,7 +121,13 @@ public class BatchTestHistoryController {
 			if(res.length()>32766){
 				res=res.substring(0, 32767);
 			}
-			cell.setCellValue(new HSSFRichTextString(res));   
+			cell.setCellValue(new HSSFRichTextString(res)); 
+			cell = row.createCell(6);  
+			String cp=r.getCheckpoint();
+			if(cp.length()>32766){
+				cp=cp.substring(0, 32767);
+			}
+			cell.setCellValue(new HSSFRichTextString(cp)); 
 		}
 		ServletOutputStream out=null;
 		try {
