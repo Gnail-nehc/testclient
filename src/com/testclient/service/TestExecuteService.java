@@ -47,7 +47,6 @@ import com.alipics.testassets.testclient.httpmodel.MixActionSettingInfo;
 import com.alipics.testassets.testclient.httpmodel.PreConfigItem;
 import com.alipics.testassets.testclient.httpmodel.ServiceBoundDataItem;
 import com.alipics.testassets.testclient.httpmodel.SqlEntity;
-import com.alipics.testassets.testclient.httpmodel.TestHistoryInfo;
 import com.alipics.testassets.testclient.httpmodel.TestResultItem;
 import com.alipics.testassets.testclient.model.CheckPointContianer;
 import com.alipics.testassets.testclient.model.HttpTarget;
@@ -572,7 +571,7 @@ public class TestExecuteService {
 						String path=arr[0];
 						String[] configs=arr[1].split(SeperatorDefinition.queryBoundRow);
 						String res="";
-						Map<String,String> reqparas=global_reference_in.containsKey(path) ? global_reference_in.get(path) : new HashMap<String,String>();
+						Map<String,String> reqparas=global_reference_in.containsKey(testPath) ? global_reference_in.get(testPath) : new HashMap<String,String>();
 						for(String item : configs){
 							String[] info=item.split(SeperatorDefinition.queryBoundItem);
 							if(global_reference_in.containsKey(path)){
@@ -591,9 +590,7 @@ public class TestExecuteService {
 							para.put(info[0], value);
 							reqparas.put(info[0], value);
 						}
-						if(!reqparas.containsKey(path)){
-							global_reference_in.put(path, reqparas);
-						}
+						global_reference_in.put(testPath, reqparas);
 					}
 				}
 				String preconfigstr = FileUtils.readFileToString(f, "UTF-8");
