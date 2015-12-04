@@ -1,4 +1,4 @@
-package com.testclient.service;
+package com.alipics.testassets.testclient.service;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import org.apache.commons.io.FileUtils;
@@ -24,30 +25,31 @@ import org.codehaus.jackson.map.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.testclient.enums.BatchTestingFolderName;
-import com.testclient.enums.HistoryFolderName;
-import com.testclient.enums.LabFolderName;
-import com.testclient.enums.LoopParameterNameInForm;
-import com.testclient.enums.RunningStatus;
-import com.testclient.enums.SeperatorDefinition;
-import com.testclient.enums.TestSetFileName;
-import com.testclient.enums.TestStatus;
-import com.testclient.enums.TimeFormatDefiniation;
-import com.testclient.factory.JsonObjectMapperFactory;
-import com.testclient.httpmodel.BatchTestItem;
-import com.testclient.httpmodel.DataGridJson;
-import com.testclient.httpmodel.Json;
-import com.testclient.httpmodel.TestExecutionJson;
-import com.testclient.httpmodel.TestExecutionStore;
-import com.testclient.httpmodel.TestHistoryItem;
-import com.testclient.httpmodel.TestResultItem;
-import com.testclient.model.HttpTarget;
-import com.testclient.model.KeyValue;
-import com.testclient.model.Parameter;
-import com.testclient.utils.Auto;
-import com.testclient.utils.FileNameUtils;
-import com.testclient.utils.MyFileUtils;
-import com.testclient.utils.TemplateUtils;
+import com.alipics.testassets.testclient.enums.BatchTestingFolderName;
+import com.alipics.testassets.testclient.enums.HistoryFolderName;
+import com.alipics.testassets.testclient.enums.LabFolderName;
+import com.alipics.testassets.testclient.enums.LoopParameterNameInForm;
+import com.alipics.testassets.testclient.enums.RunningStatus;
+import com.alipics.testassets.testclient.enums.SeperatorDefinition;
+import com.alipics.testassets.testclient.enums.TestSetFileName;
+import com.alipics.testassets.testclient.enums.TestStatus;
+import com.alipics.testassets.testclient.enums.TimeFormatDefiniation;
+import com.alipics.testassets.testclient.factory.JsonObjectMapperFactory;
+import com.alipics.testassets.testclient.httpmodel.BatchTestItem;
+import com.alipics.testassets.testclient.httpmodel.DataGridJson;
+import com.alipics.testassets.testclient.httpmodel.Json;
+import com.alipics.testassets.testclient.httpmodel.TestExecutionJson;
+import com.alipics.testassets.testclient.httpmodel.TestExecutionStore;
+import com.alipics.testassets.testclient.httpmodel.TestHistoryItem;
+import com.alipics.testassets.testclient.httpmodel.TestResultItem;
+import com.alipics.testassets.testclient.model.HttpTarget;
+import com.alipics.testassets.testclient.model.KeyValue;
+import com.alipics.testassets.testclient.model.Parameter;
+import com.alipics.testassets.testclient.utils.Auto;
+import com.alipics.testassets.testclient.utils.FileNameUtils;
+import com.alipics.testassets.testclient.utils.MyFileUtils;
+import com.alipics.testassets.testclient.utils.TemplateUtils;
+
 
 
 @Service("batchTestService")
@@ -64,7 +66,7 @@ public class BatchTestService {
 		String batchtestingfolderpath=dirPath+"/"+BatchTestingFolderName.folderName+"/"+runid;
 		try{
 			List<String> list=new ArrayList<String>();
-			if(dirPath.endsWith("-dir"))
+			if(dirPath.endsWith("-d"))
 				getTestsInfoUnderSpecificDir(dirPath,list);
 			else
 				getTestsInfoUnderSpecificRunningSet(dirPath,list);
@@ -73,8 +75,9 @@ public class BatchTestService {
 					String[] info = defaultTest.split(SeperatorDefinition.seperator);
 					String testpath=info[0];
 					String testfilename=info[1];
+					Map<String,Map<String,String>> global_reference_in=new HashMap<String,Map<String,String>>(),global_reference_out=new HashMap<String,Map<String,String>>();
 					//一条case可能循环跑了多次
-					List<TestResultItem> tris = executeTestByPath(testpath);
+					List<TestResultItem> tris = executeTestByPath(testpath,global_reference_in,global_reference_out);
 					for(TestResultItem testresult : tris){
 						generateBatchExecutionResultFile(batchtestingfolderpath,testpath,testresult,testfilename);
 					}
@@ -88,11 +91,50 @@ public class BatchTestService {
 		return batchtestingfolderpath;
 	}
 	
-	public List<TestResultItem> executeTestByPath(String testpath){
+	public List<TestResultItem> executeTestByPath(String testpath,Map<String,Map<String,String>> global_reference_in,Map<String,Map<String,String>> global_reference_out){
 		List<TestResultItem> list = new ArrayList<TestResultItem>();
 		try{
 			Map parameters=new HashMap();
-			parameters = testExecuteService.getRequestParameterMap(testpath);
+			TestResultItem testresult = new TestResultItem();
+    		String teststarttime=testresult.getTime();
+    		try{
+    			testExecuteService.setupAction(testpath,parameters,global_reference_in,global_reference_out);
+    			parameters = testExecuteService.getRequestParameterMap(testpath,global_reference_in,global_reference_out);
+    			testresult = testExecuteService.getTestResultItem(testpath,parameters);
+				if(!testresult.getResult().equals(TestStatus.exception)){
+					testExecuteService.getCheckpointsAndResultFromFile(testpath,parameters,testresult.getResponseInfo(),testresult);
+				}
+    		}catch(Exception e){
+				testresult.setResult(TestStatus.exception);
+				testresult.setComment("批量执行失败.\n"+e.getClass().toString()+e.getMessage());
+			}
+			finally{
+				testExecuteService.teardownAction(testpath,parameters,testresult.getResponseInfo(),global_reference_in,global_reference_out);
+				generateHistoryFileByTestPath(testpath,testresult);
+				list.add(testresult);
+			}
+		}catch(Exception e){
+			TestResultItem testresult = new TestResultItem();
+    		testresult.setDuration("");
+    		testresult.setResult(TestStatus.exception);
+    		testresult.setComment("getRequestParameterMap失败.\n"+e.getClass().toString()+e.getMessage());
+    		generateHistoryFileByTestPath(testpath,testresult);
+    		list.add(testresult);
+		}
+		return list;
+	}
+	
+	public void executeTestByPathWithoutCheckpoint(String testpath,Map<String,Map<String,String>> global_reference_in,Map<String,Map<String,String>> global_reference_out){
+		try{
+			Map<String,Object> parameters=new HashMap<String,Object>();
+			parameters = testExecuteService.getRequestParameterMap(testpath,global_reference_in,global_reference_out);
+			Map<String,String> reqparas=global_reference_in.containsKey(testpath) ? global_reference_in.get(testpath) : new HashMap<String,String>();
+			for(Entry<String,Object> en : parameters.entrySet()){
+				String val=en.getValue().toString();
+				String name=en.getKey().toString();
+				reqparas.put(name, val);
+			}
+			global_reference_in.put(testpath, reqparas);
 			String looptimes=(String)parameters.get(LoopParameterNameInForm.name);
 	        looptimes=looptimes!=null ?looptimes:"1";
 	        String[] loopparas=looptimes.split(SeperatorDefinition.seperator);
@@ -104,38 +146,17 @@ public class BatchTestService {
 	        		TestResultItem testresult = new TestResultItem();
 	        		String teststarttime=testresult.getTime();
 	        		try{
-	        			testExecuteService.setupAction(testpath,parameters);
-	        			testresult = testExecuteService.getTestResultItem(testpath,parameters);
-	    				if(!testresult.getResult().equals(TestStatus.exception)){
-	    					testExecuteService.getCheckpointsAndResultFromFile(testpath,parameters,testresult.getResponseInfo(),testresult);
-	    				}
+	        			testExecuteService.setupAction(testpath,parameters,global_reference_in,global_reference_out);
+	        			testExecuteService.getTestResultItem(testpath,parameters);
 	        		}catch(Exception e){
-	    				testresult.setResult(TestStatus.exception);
-	    				testresult.setComment("批量执行失败.\n"+e.getClass().toString()+e.getMessage());
 	    			}
 	    			finally{
-	    				testExecuteService.teardownAction(testpath,parameters,testresult.getResponseInfo());
-    					generateHistoryFileByTestPath(testpath,testresult);
-    					list.add(testresult);
+	    				testExecuteService.teardownAction(testpath,parameters,testresult.getResponseInfo(),global_reference_in,global_reference_out);
 	    			}
 	        	}
-	        }else{
-	    		TestResultItem testresult = new TestResultItem();
-	    		testresult.setDuration("");
-	    		testresult.setResult(TestStatus.exception);
-	    		testresult.setComment("循环次数必须为自然数！");
-	    		generateHistoryFileByTestPath(testpath,testresult);
-	    		list.add(testresult);
 	        }
 		}catch(Exception e){
-			TestResultItem testresult = new TestResultItem();
-    		testresult.setDuration("");
-    		testresult.setResult(TestStatus.exception);
-    		testresult.setComment("getRequestParameterMap失败.\n"+e.getClass().toString()+e.getMessage());
-    		generateHistoryFileByTestPath(testpath,testresult);
-    		list.add(testresult);
 		}
-		return list;
 	}
 
 	public TestExecutionJson runTest(String source,int loop,Date date){
@@ -153,8 +174,9 @@ public class BatchTestService {
 					date=new Date();
 				}
 				String time=format.format(date);
-				if(source.endsWith("-leaf") || source.endsWith("-t")){
-					List<TestResultItem> tris = executeTestByPath(source);
+				if(source.endsWith("-c")){
+					Map<String,Map<String,String>> global_reference_in=new HashMap<String,Map<String,String>>(),global_reference_out=new HashMap<String,Map<String,String>>();
+					List<TestResultItem> tris = executeTestByPath(source,global_reference_in,global_reference_out);
 					total=tris.size();
 					for(TestResultItem tri : tris){
 						String res=tri.getResult();
@@ -297,7 +319,7 @@ public class BatchTestService {
 		if(dirPath.isEmpty())
 			return j;
 		List<BatchTestItem>	row=new ArrayList<BatchTestItem>();
-		if(!dirPath.endsWith("-leaf") && !dirPath.endsWith("-t")){
+		if(!dirPath.endsWith("-c")){
 			row=getDefaultTestItems(dirPath);
 			File dir=new File(dirPath+"/"+BatchTestingFolderName.folderName);
 			String recentRunid=getRecentTest(dir);
@@ -314,7 +336,7 @@ public class BatchTestService {
 						item.setPath(dirPath+"/"+BatchTestingFolderName.folderName+"/"+recentRunid+"/"+filename);
 						item.setTime(filename.split(seperator)[1]);
 						item.setDuration(filename.split(seperator)[2]);
-						item.setStatus(filename.split(seperator)[3]);
+						item.setStatus(StringUtils.substringBefore(filename.split(seperator)[3], "."));
 						item.setDoesrun(true);
 						row.remove(bti);
 			            row.add(item);
@@ -328,10 +350,8 @@ public class BatchTestService {
 				String filename=getRecentTest(f);
 				if(!filename.isEmpty()){
 					String name=StringUtils.substringAfterLast(filename, "/");
-					if(name.endsWith("-leaf")){
-						name=StringUtils.substringBeforeLast(name, "-leaf");
-					}else if(name.endsWith("-t")){
-						name=StringUtils.substringBeforeLast(name, "-t");
+					if(name.endsWith("-c")){
+						name=StringUtils.substringBeforeLast(name, "-c");
 					}
 					String time=filename.split(SeperatorDefinition.seperator)[0];
 					String duration=filename.split(SeperatorDefinition.seperator)[1];
@@ -449,7 +469,7 @@ public class BatchTestService {
 	
 	public void returnTestsInfoUnderSpecificDir(String dirPath,List<String> testPaths){
 		MyFileUtils.makeDir(dirPath+"/"+BatchTestingFolderName.folderName);
-		if(dirPath.endsWith("-dir"))
+		if(dirPath.endsWith("-d"))
 			getTestsInfoUnderSpecificDir(dirPath,testPaths);
 		else
 			getTestsInfoUnderSpecificRunningSet(dirPath,testPaths);
@@ -460,29 +480,31 @@ public class BatchTestService {
 		String folder[] = dir.list();
 		for (String f : folder) {
 			String childpath=dirPath.replace("\\", "/")+"/"+f;
-            if(f.endsWith("-dir")){
+            if(f.endsWith("-d")){
             	getTestsInfoUnderSpecificDir(childpath, list);
             }
-            else if(f.endsWith("-leaf")){
-            	String filename=f.substring(0, f.length()-5);
-            	list.add(childpath+SeperatorDefinition.seperator+filename);
-            }
-            else if(f.endsWith("-t")){
+            else if(f.endsWith("-c")){
             	String filename=f.substring(0, f.length()-2);
             	list.add(childpath+SeperatorDefinition.seperator+filename);
             }
         }
 	}
 	
-	private void getTestsInfoUnderSpecificRunningSet(String runningSetPath,List<String> list){
-		String[] tests=labEnvironmentService.getAllTestPathInRunningSet(runningSetPath);
+	private void getTestsInfoUnderSpecificRunningSet(String dirPath,List<String> list){
+		String runningSetFullName=dirPath;
+		if(!dirPath.contains("@")){
+			for(String fn : new File("root/"+LabFolderName.folder).list()){
+				if(fn.startsWith(dirPath)){
+					runningSetFullName="root/"+LabFolderName.folder+"/"+fn;
+					break;
+				}
+			}
+		}
+		String[] tests=labEnvironmentService.getAllTestPathInRunningSet(runningSetFullName);
 		for(String testpath : tests){
 			String[] arr=testpath.split("/");
 			String filename=arr[arr.length-1];
-			if(filename.endsWith("-leaf")){
-				String testname=filename.substring(0, filename.length()-5);
-				list.add(testpath+SeperatorDefinition.seperator+testname);
-			}else if(filename.endsWith("-t")){
+			if(filename.endsWith("-c")){
 				String testname=filename.substring(0, filename.length()-2);
 				list.add(testpath+SeperatorDefinition.seperator+testname);
 			}
@@ -517,11 +539,11 @@ public class BatchTestService {
 	private int getNumberOfCaseUnderDir(File f){
 		int total = 0;
 		if(f.exists() && f.isDirectory()){
-			if(f.getName().endsWith("-dir")){
+			if(f.getName().endsWith("-d")){
 				for(File child : f.listFiles()){
 					total += getNumberOfCaseUnderDir(child);
 				}
-			}else if(f.getName().endsWith("-leaf") || f.getName().endsWith("-t")){
+			}else if(f.getName().endsWith("-c")){
 				total = 1;
 			}
 		}
