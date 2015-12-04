@@ -7,6 +7,7 @@ public class BatchTestReport {
 	private String result="";
 	private String request="";
 	private String response="";
+	private String checkpoint="";
 	public String getName() {
 		return name;
 	}
@@ -42,5 +43,11 @@ public class BatchTestReport {
 	}
 	public void setDuration(String duration) {
 		this.duration = duration;
+	}
+	public String getCheckpoint() {
+		return checkpoint;
+	}
+	public void setCheckpoint(String checkpoint) {
+		this.checkpoint = checkpoint;
 	}
 }
