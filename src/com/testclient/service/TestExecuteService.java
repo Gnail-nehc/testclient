@@ -431,12 +431,25 @@ public class TestExecuteService {
 	}
 		
 	private String getParaValueFromResponse(String response,String lb,String rb,int times){
-		String[] arr= StringUtils.substringsBetween(response, lb, rb);
-		String res="";
-		if(arr!=null){
-			res=arr.length>=times ? arr[times-1] : "";
-		}
-		return res;
+		int startpos = response.indexOf(lb);
+		if(startpos>0){
+			while(times-->0){
+				if(startpos>0)
+					response = response.substring(startpos+lb.length());
+				startpos = response.indexOf(lb);
+			}
+			int endpos = response.indexOf(rb);
+			if(endpos>0){
+				response = response.substring(0, endpos);
+				while(response.contains(lb)){
+					startpos = response.indexOf(lb);
+					response = response.substring(startpos+lb.length());
+				}
+			}else
+				response="";
+		}else
+			response="";
+		return response;
 	}
 	
 	//bacuse the function could be used in parsing request parameters,it doesn't include parsing output parameter
@@ -515,19 +528,20 @@ public class TestExecuteService {
 		if(StringUtils.contains(val, ApiKeyword.preapi+"(")){
 			String path=StringUtils.substringBetween(val, ApiKeyword.preapi+"(", ")");
 			String name=StringUtils.substringAfter(val, path+")").trim();
-			if(global_reference_in.containsKey(path)){
-				Map<String,String> reqparas=global_reference_in.get(path);
-				if(reqparas.containsKey(name)){
-					return reqparas.get(name);
-				}
+			if(global_reference_in.containsKey(path) && global_reference_in.get(path).containsKey(name)){
+				return global_reference_in.get(path).get(name);
 			}
 			Map<String,Object> paras = getRequestParameterMap(path.trim(),global_reference_in,global_reference_out);
 			for(Entry<String,Object> en : paras.entrySet()){
 				if(en.getKey().equalsIgnoreCase(name)){
 					val=en.getValue().toString();
-					Map<String,String> reqparas=global_reference_in.containsKey(path) ? global_reference_in.get(path) : new HashMap<String,String>();
-					reqparas.put(name, val);
-					global_reference_in.put(path, reqparas);
+					if(global_reference_in.containsKey(path)){
+						global_reference_in.get(path).put(name, val);
+					}else{
+						Map<String,String> reqparas=new HashMap<String,String>();
+						reqparas.put(name, val);
+						global_reference_in.put(path, reqparas);
+					}
 					break;
 				}
 			}
@@ -539,16 +553,17 @@ public class TestExecuteService {
 		if(StringUtils.contains(val, ApiKeyword.outvar+"(")){
 			String path=StringUtils.substringBetween(val, ApiKeyword.outvar+"(", ")");
 			String outpara=StringUtils.substringAfter(val, path+")").trim();
-			if(global_reference_out.containsKey(path)){
-				Map<String,String> resparas=global_reference_out.get(outpara);
-				if(resparas.containsKey(outpara)){
-					return resparas.get(outpara);
-				}
+			if(global_reference_out.containsKey(path) && global_reference_out.get(path).containsKey(outpara)){
+				return global_reference_out.get(path).get(outpara);
 			}
 			val = processOutputParameter(path, "{{"+outpara+"}}");
-			Map<String,String> outparas=global_reference_out.containsKey(path) ? global_reference_out.get(path) : new HashMap<String,String>();
-			outparas.put(outpara, val);
-			global_reference_out.put(path, outparas);
+			if(global_reference_out.containsKey(path)){
+				global_reference_out.get(path).put(outpara, val);
+			}else{
+				Map<String,String> outparas=new HashMap<String,String>();
+				outparas.put(outpara, val);
+				global_reference_out.put(path, outparas);
+			}
 		}
 		return val;
 	}
@@ -570,29 +585,33 @@ public class TestExecuteService {
 						String[] arr=setting.split(SeperatorDefinition.paraForReferencedService);
 						String path=arr[0];
 						String[] configs=arr[1].split(SeperatorDefinition.queryBoundRow);
-						String res="";
+						String res="",value="";
 						Map<String,String> reqparas=global_reference_in.containsKey(testPath) ? global_reference_in.get(testPath) : new HashMap<String,String>();
 						for(String item : configs){
 							String[] info=item.split(SeperatorDefinition.queryBoundItem);
-							if(global_reference_in.containsKey(path)){
-								if(reqparas.containsKey(info[0])){
-									para.put(info[0], reqparas.get(info[0]));
-									continue;
+							if(global_reference_in.containsKey(path) && global_reference_in.get(path).containsKey(info[0])){
+								value=global_reference_in.get(path).get(info[0]);
+							}else{
+								String lb=info[1];
+								String rb=info[2];
+								int times=Integer.parseInt(info[3]);
+								if(res.isEmpty()){
+									res = getTestResponseBody(path,global_reference_in,global_reference_out).getObj().toString();
+								}
+								value=getParaValueFromResponse(res,lb,rb,times);
+								if(global_reference_in.containsKey(testPath)){
+									global_reference_in.get(testPath).put(info[0], value);
 								}
 							}
-							String lb=info[1];
-							String rb=info[2];
-							int times=Integer.parseInt(info[3]);
-							if(res.isEmpty()){
-								res = getTestResponseBody(path,global_reference_in,global_reference_out).getObj().toString();
-							}
-							String value=getParaValueFromResponse(res,lb,rb,times);
 							para.put(info[0], value);
 							reqparas.put(info[0], value);
 						}
-						global_reference_in.put(testPath, reqparas);
+						if(!global_reference_in.containsKey(testPath)){
+							global_reference_in.put(testPath, reqparas);
+						}
 					}
 				}
+				//先解析接口的数据绑定，因为sql绑定可能引用输入变量
 				String preconfigstr = FileUtils.readFileToString(f, "UTF-8");
 				preconfigstr=parseText(preconfigstr,testPath,para,global_reference_in,global_reference_out);
 				c = mapper.readValue(preconfigstr, PreConfigContainer.class);
