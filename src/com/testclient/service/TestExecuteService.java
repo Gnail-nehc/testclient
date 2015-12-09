@@ -71,7 +71,8 @@ public class TestExecuteService {
 	private static final String NODE_MODULES="/opt/node_modules";
 	private final String SIGN="__DATASIGN__";
 	private final String FIELD2BEREPLACED="sign";
-	private final String SECRETKEY="21218CCA77804D2BA1922C33E0151105";
+	@Value("#{configProperties['SECRETKEY']}")
+	private String SECRETKEY;
 	
 	
 	private static final Logger logger = Logger.getLogger(TestExecuteService.class);
