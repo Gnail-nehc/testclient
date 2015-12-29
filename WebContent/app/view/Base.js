@@ -379,20 +379,24 @@ Ext.define('MyApp.view.Base', {
 				                items: [
 				                {
 				                    handler: function(view, rowIndex, colIndex, item, e, record, row) {
-				                    	Ext.MessageBox.confirm(
-				                        "confirm",
-				                        "确认删除？",
-				                        function(e){
-				                            if(e=='yes'){
-				                                Ext.getStore('RunningSet').removeAt(rowIndex);
-				                                Ext.getStore('RunningSet').proxy.extraParams.rootName=Ext.getCmp('Base').RootName;
-				                                Ext.getStore('RunningSet').sync({
-				                                	success:function(){
-				                                		Ext.getCmp('MainContainer').removeAll(false);
-				                                    }
-				                                });
-				                            }
-				                        }); 
+				                    	if(Ext.getCmp('Base').RootName.indexOf('root/LAB')>-1){
+			                    			Ext.MessageBox.confirm(
+						                	"confirm",
+						                        "确认删除？",
+						                        function(e){
+						                            if(e=='yes'){
+						                                Ext.getStore('RunningSet').removeAt(rowIndex);
+						                                Ext.getStore('RunningSet').proxy.extraParams.rootName=Ext.getCmp('Base').RootName;
+						                                Ext.getStore('RunningSet').sync({
+						                                	success:function(){
+						                                		Ext.getCmp('MainContainer').removeAll(false);
+						                                    }
+						                                });
+						                            }
+						                        }); 
+		    					}else{
+		    						Ext.Msg.alert("警告","请先选中运行集合所在行！");
+		    					} 
 				                    },
 				                    icon: 'image/delete.png',
 				                    tooltip: 'delete'
