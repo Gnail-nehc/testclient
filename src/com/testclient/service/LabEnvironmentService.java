@@ -101,7 +101,7 @@ public class LabEnvironmentService {
 	
 	public void deleteRunningSet(String foldername){
 		File folder=new File(foldername);
-		if(folder.exists()){
+		if(foldername.startsWith("root/"+LabFolderName.folder) && folder.exists()){
 			MyFileUtils.deleteDirectory(foldername);
 		}
 	}
